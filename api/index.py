@@ -2,7 +2,6 @@ from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 from pydantic import BaseModel
-import os
 import httpx
 
 app = FastAPI(
@@ -14,19 +13,19 @@ app = FastAPI(
 # Add CORS middleware configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 class VerificationResponse(BaseModel):
     result: dict = {"isValid": bool}
     error: Optional[str] = None
 
+# 👇 Your smart contract and hardcoded Alchemy Sepolia API key
 CONTRACT_ADDRESS = "0x802ae625C2bdac1873B8bbb709679CC401F57abc"
-ALCHEMY_API_KEY = os.getenv("ALCHEMY_API_KEY")
-SEPOLIA_RPC_URL = f"https://eth-sepolia.g.alchemy.com/v2/{ALCHEMY_API_KEY}"
+SEPOLIA_RPC_URL = "https://eth-sepolia.g.alchemy.com/v2/3h-55W2oiNtyO-rWGRA5QT95DhzlbDRA"
 
 @app.get(
     "/api/task/verification",
@@ -62,3 +61,4 @@ async def verify_task(
             return VerificationResponse(result={"isValid": is_valid}, error=None)
         except Exception as e:
             return VerificationResponse(result={"isValid": False}, error=str(e))
+
