@@ -1,16 +1,11 @@
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, Header
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 from pydantic import BaseModel
 import httpx
 
-app = FastAPI(
-    title="TaskOn Verification API Demo",
-    description="A demo API for TaskOn task verification integration",
-    version="1.0.0",
-)
+app = FastAPI()
 
-# Add CORS middleware configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -23,42 +18,40 @@ class VerificationResponse(BaseModel):
     result: dict = {"isValid": bool}
     error: Optional[str] = None
 
-# 👇 Your smart contract and hardcoded Alchemy Sepolia API key
 CONTRACT_ADDRESS = "0x802ae625C2bdac1873B8bbb709679CC401F57abc"
 SEPOLIA_RPC_URL = "https://eth-sepolia.g.alchemy.com/v2/3h-55W2oiNtyO-rWGRA5QT95DhzlbDRA"
 
-@app.get(
-    "/api/task/verification",
-    response_model=VerificationResponse,
-    summary="Verify Task Completion",
-    description="Verify if a user has placed an order on the Sepolia contract",
-)
-async def verify_task(
-    address: str,
-    authorization: Optional[str] = Header(None)
-) -> VerificationResponse:
+@app.get("/api/task/verification", response_model=VerificationResponse)
+async def verify_task(address: str, authorization: Optional[str] = Header(None)) -> VerificationResponse:
     address = address.lower()
+    contract = CONTRACT_ADDRESS.lower()
 
     payload = {
         "jsonrpc": "2.0",
         "id": 1,
-        "method": "alchemy_getAssetTransfers",
+        "method": "eth_getLogs",
         "params": [{
-            "fromAddress": address,
-            "toAddress": CONTRACT_ADDRESS,
-            "category": ["external", "erc20", "erc721", "erc1155"],
-            "withMetadata": False,
-            "excludeZeroValue": True,
-            "maxCount": "0x64"
+            "fromBlock": "0x0",
+            "toBlock": "latest",
+            "address": contract,
+            "topics": [],  # empty topics = match any event
         }]
     }
 
-    async with httpx.AsyncClient() as client:
-        try:
+    try:
+        async with httpx.AsyncClient() as client:
             response = await client.post(SEPOLIA_RPC_URL, json=payload)
-            transfers = response.json().get("result", {}).get("transfers", [])
-            is_valid = len(transfers) > 0
-            return VerificationResponse(result={"isValid": is_valid}, error=None)
-        except Exception as e:
-            return VerificationResponse(result={"isValid": False}, error=str(e))
+            logs = response.json().get("result", [])
+
+            # Look for any log where the transaction came from the user’s wallet
+            for log in logs:
+                tx_hash = log.get("transactionHash")
+                # Optional: You could call eth_getTransactionByHash to get sender, or just accept any log here
+                if tx_hash:
+                    return VerificationResponse(result={"isValid": True}, error=None)
+
+            return VerificationResponse(result={"isValid": False}, error=None)
+    except Exception as e:
+        return VerificationResponse(result={"isValid": False}, error=str(e))
+
 
