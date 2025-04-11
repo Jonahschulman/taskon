@@ -2,6 +2,8 @@ from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 from pydantic import BaseModel
+import os
+import httpx
 
 app = FastAPI(
     title="TaskOn Verification API Demo",
@@ -22,35 +24,41 @@ class VerificationResponse(BaseModel):
     result: dict = {"isValid": bool}
     error: Optional[str] = None
 
-DEMO_COMPLETED_TASKS = {
-    # Demo wallet addresses
-    "0xd5045deea369d64ab7efab41ad18b82eeabcdefg",
-    "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
-    # Demo social accounts
-    "taskonxyz",
-    "1084460817220641111",  # Discord ID
-    "6881505111",  # Telegram ID
-    "demo@taskon.xyz"
-}
+CONTRACT_ADDRESS = "0x802ae625C2bdac1873B8bbb709679CC401F57abc"
+ALCHEMY_API_KEY = os.getenv("ALCHEMY_API_KEY")
+SEPOLIA_RPC_URL = f"https://eth-sepolia.g.alchemy.com/v2/{ALCHEMY_API_KEY}"
 
 @app.get(
     "/api/task/verification",
     response_model=VerificationResponse,
     summary="Verify Task Completion",
-    description="Verify if a user has completed the task based on their wallet address or social media ID",
+    description="Verify if a user has placed an order on the Sepolia contract",
 )
 async def verify_task(
     address: str,
     authorization: Optional[str] = Header(None)
 ) -> VerificationResponse:
-    # Convert address to lowercase for case-insensitive comparison
     address = address.lower()
-    
-    # Demo implementation - check if address exists in demo completed tasks
-    is_valid = address in DEMO_COMPLETED_TASKS
-    
-    return VerificationResponse(result={"isValid": is_valid}, error=None)
 
-@app.get("/")
-async def root():
-    return {"message": "Welcome to TaskOn Verification API Demo"}
+    payload = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "alchemy_getAssetTransfers",
+        "params": [{
+            "fromAddress": address,
+            "toAddress": CONTRACT_ADDRESS,
+            "category": ["external", "erc20", "erc721", "erc1155"],
+            "withMetadata": False,
+            "excludeZeroValue": True,
+            "maxCount": "0x64"
+        }]
+    }
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(SEPOLIA_RPC_URL, json=payload)
+            transfers = response.json().get("result", {}).get("transfers", [])
+            is_valid = len(transfers) > 0
+            return VerificationResponse(result={"isValid": is_valid}, error=None)
+        except Exception as e:
+            return VerificationResponse(result={"isValid": False}, error=str(e))
