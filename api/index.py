@@ -32,18 +32,18 @@ async def verify_task(address: str, authorization: Optional[str] = Header(None))
     address = address.lower()
     contract = CONTRACT_ADDRESS.lower()
 
- payload = {
+    payload = {
         "jsonrpc": "2.0",
         "id": 1,
         "method": "alchemy_getAssetTransfers",
         "params": [{
             "fromAddress": address,
             "toAddress": contract,
-            "category": ["external", "internal"],  # no erc20/721 filters
+            "category": ["external", "internal"],
             "excludeZeroValue": False,
             "withMetadata": False,
             "maxCount": "0x64",
-            "fromBlock": 8224464,
+            "fromBlock": "0x7d7bb0",
             "toBlock": "latest"
         }]
     }
